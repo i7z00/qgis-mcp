@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "qgis": {
+      "type": "local",
+      "command": ["cmd", "/c", "C:\\Users\\dell\\qgis-mcp\\scripts\\opencode-mcp-launcher.bat"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
