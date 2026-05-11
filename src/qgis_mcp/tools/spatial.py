@@ -143,10 +143,7 @@ def register_tools(mcp):
                 else:
                     return json.dumps({"error": "Buffer operation produced no output"})
             finally:
-                try:
-                    _safe_unlink
-                except Exception:
-                    pass
+                _safe_unlink(tmp_path)
 
     @mcp.tool()
     def spatial_query(
@@ -219,7 +216,7 @@ def register_tools(mcp):
             else:
                 return json.dumps({"error": "Spatial query produced no output"})
         finally:
-            _safe_unlink
+            _safe_unlink(tmp_path)
 
     @mcp.tool()
     def reproject_layer(
@@ -290,7 +287,7 @@ def register_tools(mcp):
                 },
             }, default=str)
         finally:
-            _safe_unlink
+            _safe_unlink(tmp_path)
 
     @mcp.tool()
     def get_crs_info(crs_authid: str | None = None) -> str:

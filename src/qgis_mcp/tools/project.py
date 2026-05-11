@@ -10,36 +10,101 @@ from ..qgis_env import require_qgis
 
 def _inject_mapcanvas(project_path: str, project) -> bool:
     """
-    Post-process a .qgs file to inject <mapcanvas> if missing.
+    Post-process a .qgs/.qgz project file to inject <mapcanvas> if missing.
+
+    Handles .qgz (ZIP archive) transparently. Ensures the canvas extent uses
+    a unified projected CRS so that layers spanning multiple CRS zones render
+    correctly in QGIS Desktop.
 
     Returns True if injection happened, False if already present or failed.
     """
+    import logging
+    import zipfile
+    import tempfile
+    import os
+
+    _log = logging.getLogger(__name__)
+
     try:
-        tree = ET.parse(project_path)
-        root = tree.getroot()
+        is_qgz = project_path.lower().endswith(".qgz")
+
+        if is_qgz:
+            with zipfile.ZipFile(project_path, "r") as zf:
+                qgs_names = [n for n in zf.namelist() if n.endswith(".qgs")]
+                if not qgs_names:
+                    _log.warning("No .qgs found inside %s", project_path)
+                    return False
+                qgs_name = qgs_names[0]
+                qgs_xml = zf.read(qgs_name)
+            root = ET.fromstring(qgs_xml)
+        else:
+            tree = ET.parse(project_path)
+            root = tree.getroot()
 
         if root.find("mapcanvas") is not None:
             return False
 
-        from qgis.core import QgsCoordinateTransform
+        from qgis.core import (
+            QgsCoordinateTransform,
+            QgsCoordinateReferenceSystem,
+        )
 
+        # --- ensure a common projected CRS for the canvas extent ---
+        # Without this, layers in different CRS produce a mixed-zone
+        # bounding box that renders as a white screen in Desktop.
         project_crs = project.crs()
+        if not project_crs.isValid() or project_crs.isGeographic():
+            # find the first projected CRS among the layers
+            for layer in project.mapLayers().values():
+                lcrs = layer.crs()
+                if lcrs.isValid() and not lcrs.isGeographic():
+                    project.setCrs(lcrs)
+                    project_crs = lcrs
+                    break
+
         layers = list(project.mapLayers().values())
         if layers:
             xmin = ymin = xmax = ymax = None
             for layer in layers:
                 ext = layer.extent()
+                if ext.isEmpty() or ext.isNull():
+                    continue
                 layer_crs = layer.crs()
-                if layer_crs.isValid() and project_crs.isValid() and layer_crs != project_crs:
-                    transform = QgsCoordinateTransform(layer_crs, project_crs, project)
-                    ext = transform.transformBoundingBox(ext)
+                if (
+                    project_crs.isValid()
+                    and layer_crs.isValid()
+                    and layer_crs != project_crs
+                ):
+                    transform = QgsCoordinateTransform(
+                        layer_crs, project_crs, project
+                    )
+                    try:
+                        ext = transform.transformBoundingBox(ext)
+                    except Exception:
+                        _log.debug(
+                            "CRS transform failed for layer %s (%s → %s)",
+                            layer.name(), layer_crs.authid(), project_crs.authid(),
+                        )
+                        continue
                 if xmin is None:
-                    xmin, ymin, xmax, ymax = ext.xMinimum(), ext.yMinimum(), ext.xMaximum(), ext.yMaximum()
+                    xmin = ext.xMinimum()
+                    ymin = ext.yMinimum()
+                    xmax = ext.xMaximum()
+                    ymax = ext.yMaximum()
                 else:
                     xmin = min(xmin, ext.xMinimum())
                     ymin = min(ymin, ext.yMinimum())
                     xmax = max(xmax, ext.xMaximum())
                     ymax = max(ymax, ext.yMaximum())
+
+            if xmin is not None:
+                # add 5 % margin so layers are not flush against canvas edge
+                dx = (xmax - xmin) * 0.05
+                dy = (ymax - ymin) * 0.05
+                xmin -= dx
+                xmax += dx
+                ymin -= dy
+                ymax += dy
         else:
             xmin = ymin = xmax = ymax = 0.0
 
@@ -49,7 +114,10 @@ def _inject_mapcanvas(project_path: str, project) -> bool:
                 insert_idx = i + 1
                 break
 
-        mc = ET.Element("mapcanvas", {"annotationsVisible": "1", "name": "theMapCanvas"})
+        mc = ET.Element(
+            "mapcanvas",
+            {"annotationsVisible": "1", "name": "theMapCanvas"},
+        )
         ET.SubElement(mc, "units").text = "meters"
         extent_el = ET.SubElement(mc, "extent")
         ET.SubElement(extent_el, "xmin").text = str(xmin)
@@ -69,9 +137,20 @@ def _inject_mapcanvas(project_path: str, project) -> bool:
         ET.SubElement(mc, "expressionContextScope")
 
         root.insert(insert_idx, mc)
-        tree.write(project_path, encoding="UTF-8", xml_declaration=True)
+
+        if is_qgz:
+            new_xml = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix=".qgz")
+            os.close(tmp_fd)
+            with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr(qgs_name, new_xml)
+            os.replace(tmp_path, project_path)
+        else:
+            tree = ET.ElementTree(root)
+            tree.write(project_path, encoding="UTF-8", xml_declaration=True)
         return True
-    except Exception:
+    except Exception as exc:
+        _log.exception("_inject_mapcanvas failed for %s: %s", project_path, exc)
         return False
 
 
@@ -82,15 +161,15 @@ def save_project_file(project, project_path: str, make_paths_absolute: bool = Fa
     This is the standalone implementation used by both the MCP tool and
     direct scripts. It saves the project and injects <mapcanvas> if missing.
     """
-    from qgis.core import QgsProject
+    from qgis.core import QgsProject, Qgis
 
     path = Path(project_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if make_paths_absolute:
-        project.setFilePathStorage(QgsProject.Absolute)
+        project.setFilePathStorage(Qgis.FilePathType.Absolute)
     else:
-        project.setFilePathStorage(QgsProject.Relative)
+        project.setFilePathStorage(Qgis.FilePathType.Relative)
 
     ok = project.write(str(path))
     if not ok:
@@ -379,7 +458,7 @@ def register_tools(mcp):
         bounding box of all layers.
 
         Args:
-            project_path: Absolute path where the .qgs file should be saved.
+            project_path: Absolute path where the .qgs/.qgz file should be saved.
             make_paths_absolute: If True, convert all layer paths to absolute
                 before saving. Recommended when the project file will be moved.
         """
