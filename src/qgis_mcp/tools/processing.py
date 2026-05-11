@@ -124,38 +124,54 @@ def register_tools(mcp):
             return json.dumps({"error": f"Invalid JSON parameters: {e}"})
 
         # Resolve layer IDs to actual QGIS layer objects
+        # Any string that matches a loaded layer ID is resolved to the layer object
         project = QgsProject.instance()
         resolved_params = {}
         for key, value in params.items():
-            if isinstance(value, str) and value.startswith("layer_id_"):
+            if isinstance(value, str):
+                # Try resolving as layer ID first
                 layer = project.mapLayer(value)
-                if layer:
+                if layer is not None:
                     resolved_params[key] = layer
                 else:
-                    return json.dumps({"error": f"Layer not found for parameter '{key}': {value}"})
+                    resolved_params[key] = value
             else:
                 resolved_params[key] = value
 
         try:
             result = processing.run(algorithm_id, resolved_params)
 
-            # Build response - only include serializable output keys
+            # Build response - include output info with layer tracking
             output_info = {}
+            new_layers = []
             for key, value in result.items():
                 if isinstance(value, str):
                     output_info[key] = value
                 elif hasattr(value, "id"):
-                    output_info[key] = f"layer:{value.id()}"
+                    layer_id = value.id()
+                    output_info[key] = layer_id
+                    try:
+                        new_layers.append({
+                            "id": layer_id,
+                            "name": value.name(),
+                            "feature_count": value.featureCount() if hasattr(value, "featureCount") else None,
+                        })
+                    except Exception:
+                        new_layers.append({"id": layer_id})
                 else:
                     try:
                         output_info[key] = str(value)
                     except Exception:
                         output_info[key] = "unsupported_output_type"
 
-            return json.dumps({
+            response = {
                 "algorithm": algorithm_id,
                 "output": output_info,
-            })
+            }
+            if new_layers:
+                response["new_layers"] = new_layers
+
+            return json.dumps(response)
 
         except Exception as e:
             return json.dumps({

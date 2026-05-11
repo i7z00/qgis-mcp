@@ -17,8 +17,8 @@ build/
 Thumbs.db
 
 # Test data (large downloads)
-test_data/training/
-test_data/*.zip
+test_data/
+symbology-style.db
 
 # Temporary
 *.tmp
