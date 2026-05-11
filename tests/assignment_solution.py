@@ -275,7 +275,8 @@ print("Saving QGIS Project")
 print("=" * 60)
 
 project_path = r"C:\Users\dell\documents\qgis\test-assignment\assignment-solution-mcp\Package_A_Solution.qgs"
-QgsProject.instance().write(project_path)
+from qgis_mcp.tools.project import save_project_file
+save_project_file(QgsProject.instance(), project_path, make_paths_absolute=True)
 print(f"  Project saved: {project_path}")
 
 # ════════════════════════════════════════════════════════════════

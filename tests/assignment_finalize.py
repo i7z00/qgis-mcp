@@ -131,8 +131,9 @@ with open(report, "w") as f:
             f.write(f"    CULVERT: {r['culvert']}\n")
 
 # ── Save QGIS project ──
+from qgis_mcp.tools.project import save_project_file
 proj = Path(SOL_DIR) / "Package_A_Solution.qgs"
-QgsProject.instance().write(str(proj))
+save_project_file(QgsProject.instance(), str(proj), make_paths_absolute=True)
 
 # ── Output catalog ──
 print(f"\n{'='*80}")

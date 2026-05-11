@@ -6,6 +6,8 @@ Connect QGIS spatial analysis to AI agentic environments (Claude Code, Codex, Op
 
 The QGIS MCP Server exposes QGIS's spatial analysis capabilities as MCP tools, resources, and prompts. AI agents can load GIS data, query features, perform spatial analysis, run processing algorithms, analyze rasters, and export maps — all through natural language interaction.
 
+> **For AI agents / developers**: See [`AGENTS.md`](./AGENTS.md) for critical environment constraints, code patterns, and the verification protocol.
+
 ## Architecture
 
 ```
@@ -20,7 +22,7 @@ AI Agent (Claude Code / Codex / OpenCode)
   │                                     └── Map rendering
 ```
 
-- **Headless QGIS**: Uses `QgsApplication([], False)` — no GUI required
+- **Headless QGIS**: Uses `QgsApplication([], False)` — no GUI required. Projects saved from headless QGIS omit `<mapcanvas>`, which causes a **white/blank canvas** in QGIS Desktop. Always use the `save_project` tool (auto-injects canvas) instead of raw `QgsProject.write()`.
 - **Auto-discovery**: Finds QGIS installation from env vars or common paths
 - **Degrade gracefully**: `--no-qgis` mode allows testing without QGIS installed
 - **Dual transport**: STDIO (local agents) and HTTP (remote agents)
@@ -189,7 +191,7 @@ python -m qgis_mcp.server --http --port 8000 --host 0.0.0.0
 
 ## Tools Reference
 
-### Layer Management (6 tools)
+### Layer Management (8 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -199,6 +201,8 @@ python -m qgis_mcp.server --http --port 8000 --host 0.0.0.0
 | `list_layers` | List all loaded layers with metadata |
 | `get_layer_info` | Get detailed layer metadata (fields, CRS, extent) |
 | `remove_layer` | Remove a layer from the project |
+| `save_project` | Save project with auto-injected `<mapcanvas>` for Desktop compatibility |
+| `validate_project` | Check project health (CRS, paths, extents) before saving |
 
 ### Feature Queries (3 tools)
 
