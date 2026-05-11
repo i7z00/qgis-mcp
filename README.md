@@ -124,9 +124,9 @@ Should print the CLI help. Add `--qgis-path` to test with full spatial analysis.
 
 ### Step 5: Configure your AI agent
 
-#### OpenCode
+#### OpenCode — Global Setup (Recommended)
 
-Create `.opencode/opencode.jsonc` in your project root:
+Create `C:\Users\%USERNAME%\.opencode\opencode.jsonc` (global config, works from any directory):
 
 **Windows (OSGeo4W)** — uses the bundled launcher:
 ```jsonc
@@ -135,7 +135,7 @@ Create `.opencode/opencode.jsonc` in your project root:
   "mcp": {
     "qgis": {
       "type": "local",
-      "command": ["cmd", "/c", "C:\\path\\to\\qgis-mcp\\scripts\\opencode-mcp-launcher.bat"],
+      "command": ["cmd", "/c", "C:\\Users\\dell\\qgis-mcp\\scripts\\opencode-mcp-launcher.bat"],
       "enabled": true,
       "timeout": 30000
     }
@@ -158,21 +158,32 @@ Create `.opencode/opencode.jsonc` in your project root:
 }
 ```
 
+> **Why global?** The `.opencode/opencode.jsonc` in your project root only works when the AI starts in that specific folder. The global config at `~/.opencode/opencode.jsonc` makes the QGIS MCP server available from **any** working directory.
+
+#### OpenCode — Per-Project Setup
+
+If you prefer, you can also place the same config in `.opencode/opencode.jsonc` inside your project root (e.g., `C:\Users\dell\documents\qgis\my-project\.opencode\opencode.jsonc`). This overrides the global config for that project.
+
 #### Claude Code / Claude Desktop
+
+Claude Code uses a different config format. Add to your Claude settings:
 
 ```json
 {
   "mcpServers": {
     "qgis": {
-      "command": "python",
-      "args": ["-m", "qgis_mcp.server", "--qgis-path", "/path/to/qgis"],
+      "command": "cmd",
+      "args": ["/c", "C:\\Users\\dell\\qgis-mcp\\scripts\\opencode-mcp-launcher.bat"],
       "env": {
-        "QGIS_INSTALL_PATH": "/path/to/qgis"
+        "QGIS_INSTALL_PATH": "C:\\Users\\dell\\AppData\\Local\\Programs\\OSGeo4W\\apps\\qgis-ltr"
       }
     }
   }
 }
 ```
+
+For Claude Desktop on Windows, the config file is typically at:
+`%APPDATA%\Claude\settings.json`
 
 ### Step 6: HTTP mode (optional, for remote agents)
 
@@ -188,6 +199,16 @@ python -m qgis_mcp.server --http --port 8000 --host 0.0.0.0
 | `DLL load failed` (Windows) | Use the OSGeo4W launcher script or set `PYTHONHOME` and `PATH` to point to QGIS's Python and bin directories. |
 | `Processing plugin has not been loaded` | Processing framework not initialized. The server auto-initializes it — ensure QGIS is fully installed with processing plugin. |
 | `qgis_mcp` not found | Install with `pip install git+https://github.com/i7z00/qgis-mcp.git` or `pip install -e .` from source. |
+| Agent doesn't know about QGIS in other folders | Ensure global config exists at `~/.opencode/opencode.jsonc` (not just in project root). See Step 5 above. |
+
+### Cross-Project Skill (Optional)
+
+For AI agents that support skills (Claude Code, etc.), a reusable skill file is available at:
+```
+C:\Users\dell\.claude\skills\qgis-mcp\SKILL.md
+```
+
+Load it in any session by asking the agent: *"Load the qgis-mcp skill"* or *"Use the QGIS MCP skill"*. This injects the critical rules (use `save_project`, not raw write; call `validate_project`; etc.) even when the agent is working outside the `qgis-mcp` directory.
 
 ## Tools Reference
 

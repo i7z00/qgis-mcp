@@ -7,5 +7,6 @@
       "enabled": true,
       "timeout": 30000
     }
-  }
+  },
+  "_note": "Global config also exists at C:\\Users\\dell\\.opencode\\opencode.jsonc — keeping this for backward compatibility"
 }
