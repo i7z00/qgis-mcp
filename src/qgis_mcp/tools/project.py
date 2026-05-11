@@ -51,19 +51,22 @@ def register_tools(mcp):
         """
         Load a vector layer from a file (Shapefile, GeoJSON, GPKG, etc.).
 
+        For GeoPackage files with multiple layers, use: 'path/to/file.gpkg|layername=layer_name'
+
         Args:
-            file_path: Absolute path to the vector file.
+            file_path: Absolute path to the vector file. Use '|layername=X' for GeoPackage layers.
             layer_name: Optional display name for the layer.
         """
         require_qgis()
         from qgis.core import QgsVectorLayer
 
-        path = Path(file_path)
+        actual_path, provider = _parse_layer_path(file_path)
+        path = Path(actual_path)
         if not path.exists():
-            return json.dumps({"error": f"File not found: {file_path}"})
+            return json.dumps({"error": f"File not found: {actual_path}"})
 
         name = layer_name or path.stem
-        layer = QgsVectorLayer(str(path), name, "ogr")
+        layer = QgsVectorLayer(file_path, name, provider)
         if not layer.isValid():
             return json.dumps({"error": f"Invalid vector layer: {file_path}"})
 
@@ -73,7 +76,7 @@ def register_tools(mcp):
         return json.dumps({
             "id": layer.id(),
             "name": layer.name(),
-            "source": str(path),
+            "source": file_path,
             "geometry_type": _geometry_type_str(layer.geometryType()),
             "feature_count": layer.featureCount(),
             "crs": layer.crs().authid() if layer.crs().isValid() else None,
@@ -92,9 +95,10 @@ def register_tools(mcp):
         require_qgis()
         from qgis.core import QgsRasterLayer
 
-        path = Path(file_path)
+        actual_path, _ = _parse_layer_path(file_path)
+        path = Path(actual_path)
         if not path.exists():
-            return json.dumps({"error": f"File not found: {file_path}"})
+            return json.dumps({"error": f"File not found: {actual_path}"})
 
         name = layer_name or path.stem
         layer = QgsRasterLayer(str(path), name)
@@ -255,3 +259,28 @@ def _extent_to_dict(extent) -> dict:
         "xmax": extent.xMaximum(),
         "ymax": extent.yMaximum(),
     }
+
+
+def _parse_layer_path(file_path: str) -> tuple[str, str]:
+    """
+    Parse a file path that may include QGIS provider-specific suffix.
+
+    Handles formats like:
+      - path/to/file.gpkg|layername=buildings → (path, "ogr")
+      - path/to/file.shp → (path, "ogr")
+      - path/to/file.tif → (path, "gdal")
+
+    Returns (actual_file_path, provider_name).
+    """
+    if "|" in file_path:
+        actual_path = file_path.split("|")[0]
+    else:
+        actual_path = file_path
+
+    ext = Path(actual_path).suffix.lower()
+    if ext in (".tif", ".tiff", ".geotiff"):
+        provider = "gdal"
+    else:
+        provider = "ogr"
+
+    return actual_path, provider

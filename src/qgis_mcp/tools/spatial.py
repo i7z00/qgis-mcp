@@ -144,7 +144,7 @@ def register_tools(mcp):
                     return json.dumps({"error": "Buffer operation produced no output"})
             finally:
                 try:
-                    Path(tmp_path).unlink(missing_ok=True)
+                    _safe_unlink
                 except Exception:
                     pass
 
@@ -219,7 +219,7 @@ def register_tools(mcp):
             else:
                 return json.dumps({"error": "Spatial query produced no output"})
         finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            _safe_unlink
 
     @mcp.tool()
     def reproject_layer(
@@ -290,7 +290,7 @@ def register_tools(mcp):
                 },
             }, default=str)
         finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            _safe_unlink
 
     @mcp.tool()
     def get_crs_info(crs_authid: str | None = None) -> str:
@@ -315,11 +315,9 @@ def register_tools(mcp):
             "authid": crs.authid(),
             "description": crs.description(),
             "is_geographic": crs.isGeographic(),
-            "is_projected": crs.isProjected(),
             "wkt": crs.toWkt(),
             "proj4": crs.toProj(),
             "units": str(crs.mapUnits()),
-            "has_vertical_crs": crs.hasVerticalAxisInverted(),
         })
 
     @mcp.tool()
@@ -457,8 +455,16 @@ def _extent_to_dict(extent) -> dict:
     }
 
 
+def _safe_unlink(path: str) -> None:
+    """Safely try to delete a temp file, ignoring Windows file lock errors."""
+    try:
+        Path(path).unlink(missing_ok=True)
+    except PermissionError:
+        pass  # File still locked by QGIS, will be cleaned up on exit
+
+
 def _load_temp_layer(path: str):
-    """Load a temporary layer from a file path."""
+    """Load a temporary vector layer from a file path."""
     from qgis.core import QgsVectorLayer
     layer = QgsVectorLayer(path, "temp", "ogr")
     return layer if layer.isValid() else None
