@@ -27,23 +27,39 @@ AI Agent (Claude Code / Codex / OpenCode)
 
 ## Installation
 
-**Prerequisites**: [QGIS](https://qgis.org/) 3.x installed on the system with Python bindings.
+### Prerequisites
 
-### From GitHub
+- **QGIS 3.x** installed ([download](https://qgis.org/download/))
+- **Python 3.10+** with pip
+- **Git** (for source install)
+
+### Step 1: Install QGIS
+
+Choose your platform:
+
+| OS | Recommended method |
+|----|--------------------|
+| **Windows** | [OSGeo4W Network Installer](https://qgis.org/download/) — select `qgis-ltr` (Desktop) |
+| **Linux** | `sudo apt install qgis` (Debian/Ubuntu) or your distro's package manager |
+| **macOS** | [QGIS macOS Installer](https://qgis.org/download/macos/) or `brew install qgis` |
+
+### Step 2: Install qgis-mcp
+
+#### Option A: From GitHub (recommended)
 
 ```bash
 pip install git+https://github.com/i7z00/qgis-mcp.git
 ```
 
-### From local source
+#### Option B: From local source
 
 ```bash
 git clone https://github.com/i7z00/qgis-mcp.git
 cd qgis-mcp
-pip install .
+pip install -e .
 ```
 
-### Development install
+#### Option C: Development install
 
 ```bash
 git clone https://github.com/i7z00/qgis-mcp.git
@@ -52,25 +68,95 @@ uv venv
 uv pip install -e ".[dev]"
 ```
 
-## Quick Start
+### Step 3: Platform-specific setup
 
-### 1. Find your QGIS installation path
+#### Windows (OSGeo4W)
 
-Open QGIS Desktop, open the Python console (`Plugins > Python Console`), and run:
+OSGeo4W bundles its own Python. qgis-mcp must run with QGIS's Python to load its C extensions. A launcher script is provided:
 
-```python
-from qgis.core import QgsApplication
-print(QgsApplication.prefixPath())
+```cmd
+scripts\opencode-mcp-launcher.bat
 ```
 
-Common paths:
-- **Windows**: `C:\OSGeo4W\apps\qgis` or `C:\Program Files\QGIS 3.x`
-- **Linux**: `/usr`
-- **macOS**: `/Applications/QGIS.app/Contents/MacOS`
+This sets `PYTHONHOME`, `PATH`, `QT_PLUGIN_PATH`, `GDAL_DATA`, and `PROJ_DATA` automatically, then starts the server using QGIS's bundled `python3.exe`.
 
-### 2. Configure your AI agent
+If you installed QGIS via the standalone installer (not OSGeo4W), set the environment variable:
 
-#### Claude Code / OpenCode
+```cmd
+set QGIS_INSTALL_PATH=C:\Program Files\QGIS 3.40
+python -m qgis_mcp.server
+```
+
+#### Linux
+
+```bash
+# Find your QGIS Python path
+QGIS_PATH=$(python3 -c "from qgis.core import QgsApplication; print(QgsApplication.prefixPath())" 2>/dev/null || echo "/usr")
+
+# Run with auto-detection
+python3 -m qgis_mcp.server --qgis-path "$QGIS_PATH"
+
+# Or set environment variable
+export QGIS_INSTALL_PATH=/usr
+python3 -m qgis_mcp.server
+```
+
+#### macOS
+
+```bash
+# Homebrew
+export QGIS_INSTALL_PATH=/Applications/QGIS.app/Contents/MacOS
+python3 -m qgis_mcp.server
+
+# Or auto-detect
+python3 -m qgis_mcp.server --qgis-path /Applications/QGIS.app/Contents/MacOS
+```
+
+### Step 4: Verify
+
+```bash
+python -m qgis_mcp.server --no-qgis --help
+```
+
+Should print the CLI help. Add `--qgis-path` to test with full spatial analysis.
+
+### Step 5: Configure your AI agent
+
+#### OpenCode
+
+Create `.opencode/opencode.jsonc` in your project root:
+
+**Windows (OSGeo4W)** — uses the bundled launcher:
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "qgis": {
+      "type": "local",
+      "command": ["cmd", "/c", "C:\\path\\to\\qgis-mcp\\scripts\\opencode-mcp-launcher.bat"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
+```
+
+**Linux / macOS / Windows (standalone QGIS)** — uses system Python:
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "qgis": {
+      "type": "local",
+      "command": ["python3", "-m", "qgis_mcp.server", "--qgis-path", "/path/to/qgis"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
+```
+
+#### Claude Code / Claude Desktop
 
 ```json
 {
@@ -86,31 +172,20 @@ Common paths:
 }
 ```
 
-#### Claude Desktop
-
-```json
-{
-  "mcpServers": {
-    "qgis": {
-      "command": "python",
-      "args": ["-m", "qgis_mcp.server", "--qgis-path", "C:\\OSGeo4W\\apps\\qgis"]
-    }
-  }
-}
-```
-
-### 3. HTTP mode (for remote agents)
+### Step 6: HTTP mode (optional, for remote agents)
 
 ```bash
 python -m qgis_mcp.server --http --port 8000 --host 0.0.0.0
 ```
 
-### 4. Testing without QGIS
+### Troubleshooting
 
-```bash
-python -m qgis_mcp.server --no-qgis
-# Server starts but spatial analysis tools return helpful errors
-```
+| Symptom | Fix |
+|---------|-----|
+| `ModuleNotFoundError: No module named 'qgis'` | QGIS not installed or QGIS_INSTALL_PATH is wrong. Run `QgsApplication.prefixPath()` in QGIS Python Console to find the path. |
+| `DLL load failed` (Windows) | Use the OSGeo4W launcher script or set `PYTHONHOME` and `PATH` to point to QGIS's Python and bin directories. |
+| `Processing plugin has not been loaded` | Processing framework not initialized. The server auto-initializes it — ensure QGIS is fully installed with processing plugin. |
+| `qgis_mcp` not found | Install with `pip install git+https://github.com/i7z00/qgis-mcp.git` or `pip install -e .` from source. |
 
 ## Tools Reference
 
@@ -261,10 +336,15 @@ Options:
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `QGIS_INSTALL_PATH` | Path to QGIS installation directory |
-| `QGIS_PREFIX_PATH` | Set automatically during initialization |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `QGIS_INSTALL_PATH` | Yes | Path to QGIS installation directory |
+| `PYTHONHOME` | OSGeo4W only | Path to QGIS's bundled Python (e.g. `OSGeo4W\apps\Python312`) |
+| `QT_PLUGIN_PATH` | OSGeo4W only | Path to Qt5 plugins (e.g. `OSGeo4W\apps\Qt5\plugins`) |
+| `GDAL_DATA` | OSGeo4W only | Path to GDAL data (e.g. `OSGeo4W\apps\gdal\share\gdal`) |
+| `PROJ_DATA` or `PROJ_LIB` | OSGeo4W only | Path to PROJ data (e.g. `OSGeo4W\share\proj`) |
+| `QGIS_PREFIX_PATH` | Auto | Set automatically during initialization |
+| `PYTHONPATH` | Auto | QGIS Python modules path, set automatically |
 
 ## Project Structure
 
