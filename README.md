@@ -27,20 +27,29 @@ AI Agent (Claude Code / Codex / OpenCode)
 
 ## Installation
 
-```bash
-pip install qgis-mcp
-```
-
 **Prerequisites**: [QGIS](https://qgis.org/) 3.x installed on the system with Python bindings.
 
-For development:
+### From GitHub
 
 ```bash
-git clone <repo-url>
+pip install git+https://github.com/i7z00/qgis-mcp.git
+```
+
+### From local source
+
+```bash
+git clone https://github.com/i7z00/qgis-mcp.git
+cd qgis-mcp
+pip install .
+```
+
+### Development install
+
+```bash
+git clone https://github.com/i7z00/qgis-mcp.git
 cd qgis-mcp
 uv venv
-uv pip install "mcp[cli]>=1.0.0" pydantic
-uv pip install pytest pytest-asyncio      # for tests
+uv pip install -e ".[dev]"
 ```
 
 ## Quick Start
@@ -67,8 +76,8 @@ Common paths:
 {
   "mcpServers": {
     "qgis": {
-      "command": "qgis-mcp",
-      "args": ["--qgis-path", "/path/to/qgis"],
+      "command": "python",
+      "args": ["-m", "qgis_mcp.server", "--qgis-path", "/path/to/qgis"],
       "env": {
         "QGIS_INSTALL_PATH": "/path/to/qgis"
       }
@@ -93,13 +102,13 @@ Common paths:
 ### 3. HTTP mode (for remote agents)
 
 ```bash
-qgis-mcp --http --port 8000 --host 0.0.0.0
+python -m qgis_mcp.server --http --port 8000 --host 0.0.0.0
 ```
 
 ### 4. Testing without QGIS
 
 ```bash
-qgis-mcp --no-qgis
+python -m qgis_mcp.server --no-qgis
 # Server starts but spatial analysis tools return helpful errors
 ```
 
@@ -207,8 +216,14 @@ Agent calls tools in sequence:
 
 Download the training data:
 ```bash
-wget https://github.com/qgis/QGIS-Training-Data/archive/release_3.44.zip
-unzip release_3.44.zip
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/qgis/QGIS-Training-Data/archive/release_3.44.zip" -OutFile "training_data.zip"
+
+# Linux/macOS
+curl -L -o training_data.zip https://github.com/qgis/QGIS-Training-Data/archive/release_3.44.zip
+
+# Extract
+unzip training_data.zip
 ```
 
 ## Testing
@@ -234,7 +249,7 @@ Test results: **18/18 tests pass** (schema validation, error handling, resource/
 ## CLI Reference
 
 ```
-qgis-mcp [OPTIONS]
+python -m qgis_mcp.server [OPTIONS]
 
 Options:
   --http              Start with Streamable HTTP transport (default: stdio)
