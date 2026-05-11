@@ -161,6 +161,14 @@ def _setup_osgeo4w_environment(osgeo4w_root: Path, qgis_app: Path) -> None:
         os.environ["PROJ_DATA"] = proj_data
         os.environ["PROJ_LIB"] = proj_data
 
+    # GRASS GIS (needed for hydrological processing)
+    grass_dir = root + "\\apps\\grass\\grass84"
+    if Path(grass_dir).exists():
+        os.environ["GISBASE"] = grass_dir
+        path_parts.insert(2, grass_dir + "\\lib")
+        path_parts.insert(2, grass_dir + "\\bin")
+        os.environ["PATH"] = ";".join(path_parts)
+
     # Misc
     os.environ["GDAL_FILENAME_IS_UTF8"] = "YES"
     os.environ["VSI_CACHE"] = "TRUE"
